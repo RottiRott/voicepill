@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>VoicePill</title>
+  <style>
+    :root {
+      --pine: #06251a;
+      --forest: #0e4630;
+      --signal: #2fbf7f;
+      --mist: #dcefe4;
+      --paper: #fbfdfc;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      background: transparent;
+      overflow: hidden;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #pill {
+      position: absolute;
+      inset: 4px auto auto 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      height: 40px;
+      padding: 0 18px 0 14px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--pine) 0%, var(--forest) 62%, #1c6b47 100%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 6px 22px rgba(4, 28, 19, 0.45);
+      color: var(--paper);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      opacity: 0.28;
+      transition: opacity 0.35s ease, background 0.35s ease;
+      cursor: default;
+    }
+    #pill:hover { opacity: 0.9; }
+    #pill.active { opacity: 1; }
+    #pill.error {
+      background: linear-gradient(135deg, #3a1210, #6e211c);
+    }
+
+    /* Status-Punkt */
+    #dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--mist);
+      flex: none;
+      transition: background 0.3s ease;
+    }
+    .recording #dot {
+      background: #ff5d55;
+      animation: breathe 1.4s ease-in-out infinite;
+    }
+    .processing #dot, .refining #dot {
+      background: var(--signal);
+      animation: spinPulse 0.9s ease-in-out infinite;
+    }
+    .done #dot { background: var(--signal); }
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 93, 85, 0.5); }
+      50% { transform: scale(1.25); box-shadow: 0 0 0 6px rgba(255, 93, 85, 0); }
+    }
+    @keyframes spinPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #dot { animation: none !important; }
+      #bars span { animation: none !important; height: 60% !important; }
+    }
+
+    /* Mini-Waveform während der Aufnahme */
+    #bars {
+      display: none;
+      align-items: center;
+      gap: 2.5px;
+      height: 16px;
+    }
+    .recording #bars { display: flex; }
+    #bars span {
+      width: 2.5px;
+      border-radius: 2px;
+      background: var(--mist);
+      animation: wave 1s ease-in-out infinite;
+    }
+    #bars span:nth-child(1) { animation-delay: 0s; }
+    #bars span:nth-child(2) { animation-delay: 0.15s; }
+    #bars span:nth-child(3) { animation-delay: 0.3s; }
+    #bars span:nth-child(4) { animation-delay: 0.45s; }
+    #bars span:nth-child(5) { animation-delay: 0.6s; }
+    @keyframes wave {
+      0%, 100% { height: 25%; }
+      50% { height: 100%; }
+    }
+
+    #label { overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+    #timer {
+      font-variant-numeric: tabular-nums;
+      color: var(--mist);
+      font-weight: 600;
+      display: none;
+    }
+    .recording #timer { display: inline; }
+  </style>
+</head>
+<body>
+  <div id="pill">
+    <div id="dot"></div>
+    <div id="bars"><span></span><span></span><span></span><span></span><span></span></div>
+    <span id="label">Bereit</span>
+    <span id="timer">0:00</span>
+  </div>
+  <script src="presets.js"></script>
+  <script src="pill.js"></script>
+</body>
+</html>
