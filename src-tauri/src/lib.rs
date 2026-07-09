@@ -20,12 +20,12 @@ struct AppState {
 // ---------- Aufnahme ----------
 
 #[tauri::command]
-fn start_recording(state: tauri::State<AppState>) -> Result<(), String> {
+fn start_recording(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     let mut rec = state.recorder.lock().unwrap();
     if rec.is_some() {
         return Err("Aufnahme läuft bereits".into());
     }
-    *rec = Some(audio::RecordingSession::start()?);
+    *rec = Some(audio::RecordingSession::start(app)?);
     Ok(())
 }
 
@@ -133,6 +133,11 @@ fn has_token(key: String) -> bool {
         .is_ok()
 }
 
+#[tauri::command]
+fn get_token(key: String) -> Result<String, String> {
+    get_keyring_token(&key)
+}
+
 // ---------- Einstellungen ----------
 
 fn settings_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -221,6 +226,7 @@ pub fn run() {
             paste_text,
             set_token,
             has_token,
+            get_token,
             load_settings,
             save_settings,
             update_hotkey

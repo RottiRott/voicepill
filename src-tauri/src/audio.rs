@@ -2,6 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
+use tauri::Emitter;
 
 pub struct RecordingSession {
     samples: Arc<Mutex<Vec<f32>>>,
@@ -12,7 +13,7 @@ pub struct RecordingSession {
 }
 
 impl RecordingSession {
-    pub fn start() -> Result<Self, String> {
+    pub fn start(app: tauri::AppHandle) -> Result<Self, String> {
         let samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel::<Result<(u32, u16), String>>();
@@ -82,8 +83,51 @@ impl RecordingSession {
             match result {
                 Ok((sr, ch, stream)) => {
                     let _ = tx.send(Ok((sr, ch)));
+                    let mut last_index = 0;
+                    let to_sr = 16000;
+                    let factor = sr as f32 / to_sr as f32;
+
                     while !stop_thread.load(Ordering::Relaxed) {
-                        std::thread::sleep(Duration::from_millis(30));
+                        std::thread::sleep(Duration::from_millis(100));
+
+                        let current_chunk = {
+                            let g = samples_thread.lock().unwrap();
+                            if g.len() > last_index {
+                                let chunk = g[last_index..].to_vec();
+                                last_index = g.len();
+                                Some(chunk)
+                            } else {
+                                None
+                            }
+                        };
+
+                        if let Some(chunk) = current_chunk {
+                            let mono: Vec<f32> = if ch > 1 {
+                                chunk
+                                    .chunks(ch as usize)
+                                    .map(|c| c.iter().sum::<f32>() / c.len() as f32)
+                                    .collect()
+                            } else {
+                                chunk
+                            };
+
+                            let mut resampled = Vec::new();
+                            let mut src_index = 0.0f32;
+                            while (src_index as usize) < mono.len() {
+                                let sample = mono[src_index as usize];
+                                resampled.push((sample.clamp(-1.0, 1.0) * 32767.0) as i16);
+                                src_index += factor;
+                            }
+
+                            let mut bytes = Vec::with_capacity(resampled.len() * 2);
+                            for s in resampled {
+                                bytes.extend_from_slice(&s.to_le_bytes());
+                            }
+
+                            use base64::Engine;
+                            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                            let _ = app.emit("audio-chunk", b64);
+                        }
                     }
                     drop(stream);
                 }

@@ -11,6 +11,10 @@ let state = "idle"; // idle | recording | processing | refining | done | error
 let timerInterval = null;
 let recordStart = 0;
 
+let liveSocket = null;
+let liveText = "";
+let audioChunkUnlisten = null;
+
 function setState(next, text) {
   state = next;
   pill.className = next === "idle" ? "" : `active ${next}`;
@@ -50,12 +54,103 @@ function buildRefinePrompt(settings) {
   return (PRESETS[preset] || PRESETS.cleanup).prompt;
 }
 
+async function startLiveTranscription() {
+  try {
+    const s = await invoke("load_settings");
+    if (s.stt_provider !== "gemini") return;
+
+    const apiKey = await invoke("get_token", { key: "gemini" });
+    if (!apiKey) {
+      throw new Error("Kein API-Token für Gemini hinterlegt. Bitte speichern.");
+    }
+
+    const model = s.stt_model || "gemini-3-flash";
+    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    
+    liveSocket = new WebSocket(wsUrl);
+    liveText = "";
+
+    liveSocket.onopen = () => {
+      liveSocket.send(JSON.stringify({
+        setup: {
+          model: `models/${model}`,
+          generationConfig: {
+            responseModalities: ["TEXT"]
+          },
+          systemInstruction: {
+            parts: [
+              {
+                text: "You are a precise speech-to-text transcriber. Transcribe the user's speech exactly as spoken in its original language. Do not translate. Output ONLY the transcription. Do not reply or comment."
+              }
+            ]
+          }
+        }
+      }));
+    };
+
+    liveSocket.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.serverContent && msg.serverContent.modelTurn && msg.serverContent.modelTurn.parts) {
+          const partText = msg.serverContent.modelTurn.parts.map(p => p.text).join("");
+          liveText += partText;
+          const display = liveText.trim();
+          if (display && state === "recording") {
+            label.textContent = display;
+          }
+        }
+      } catch (err) {
+        console.error("Live transcription parse error", err);
+      }
+    };
+
+    liveSocket.onerror = (err) => {
+      console.error("Live transcription error", err);
+    };
+
+    audioChunkUnlisten = await listen("audio-chunk", (event) => {
+      if (liveSocket && liveSocket.readyState === WebSocket.OPEN) {
+        liveSocket.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [
+              {
+                mimeType: "audio/pcm",
+                data: event.payload
+              }
+            ]
+          }
+        }));
+      }
+    });
+
+  } catch (err) {
+    await invoke("cancel_recording").catch(() => {});
+    showError(err);
+  }
+}
+
+async function cleanUpLive() {
+  if (liveSocket) {
+    try {
+      liveSocket.close();
+    } catch(e) {}
+    liveSocket = null;
+  }
+  if (audioChunkUnlisten) {
+    try {
+      audioChunkUnlisten();
+    } catch(e) {}
+    audioChunkUnlisten = null;
+  }
+}
+
 async function toggle() {
   if (state === "idle" || state === "done" || state === "error") {
     try {
       await invoke("start_recording");
       setState("recording", "Aufnahme");
       startTimer();
+      await startLiveTranscription();
     } catch (e) {
       showError(e);
     }
@@ -68,12 +163,20 @@ async function toggle() {
     try {
       await invoke("stop_recording");
       const s = await invoke("load_settings");
+      
+      const finalLiveText = liveText.trim();
+      await cleanUpLive();
 
-      let text = await invoke("transcribe", {
-        provider: s.stt_provider,
-        model: s.stt_model,
-        language: s.language,
-      });
+      let text = "";
+      if (s.stt_provider === "gemini" && finalLiveText) {
+        text = finalLiveText;
+      } else {
+        text = await invoke("transcribe", {
+          provider: s.stt_provider,
+          model: s.stt_model,
+          language: s.language,
+        });
+      }
 
       const prompt = buildRefinePrompt(s);
       if (s.refine_enabled && prompt) {
@@ -90,10 +193,10 @@ async function toggle() {
       setState("done", s.auto_paste ? "Eingefügt" : "In Zwischenablage");
       setTimeout(idle, 1800);
     } catch (e) {
+      await cleanUpLive();
       showError(e);
     }
   }
-  // Während processing/refining: Toggle ignorieren
 }
 
 // Klick auf die Pille während der Aufnahme bricht ab
@@ -101,6 +204,7 @@ pill.addEventListener("click", async () => {
   if (state === "recording") {
     await invoke("cancel_recording").catch(() => {});
     stopTimer();
+    await cleanUpLive();
     setState("done", "Abgebrochen");
     setTimeout(idle, 1200);
   }
