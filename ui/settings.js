@@ -7,7 +7,7 @@ const STT_MODEL_DEFAULTS = {
   openai: "gpt-4o-mini-transcribe",
   deepgram: "nova-2",
   mistral: "voxtral-mini-latest",
-  gemini: "gemini-3.1-flash-live-preview",
+  gemini: "gemini-2.0-flash-exp",
 };
 
 const LLM_MODEL_DEFAULTS = {
@@ -23,7 +23,7 @@ const STT_MODEL_SUGGESTIONS = {
   openai: ["whisper-1"],
   deepgram: ["nova-2", "nova-2-ea", "enhanced"],
   mistral: ["voxtral-mini-latest"],
-  gemini: ["gemini-3.1-flash-live-preview", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-3-flash"],
+  gemini: ["gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-3.1-flash-live-preview", "gemini-3.5-flash", "gemini-3-flash"],
 };
 
 const LLM_MODEL_SUGGESTIONS = {

@@ -168,8 +168,12 @@ async function toggle() {
       await cleanUpLive();
 
       let text = "";
-      if (s.stt_provider === "gemini" && finalLiveText) {
-        text = finalLiveText;
+      if (s.stt_provider === "gemini") {
+        if (finalLiveText) {
+          text = finalLiveText;
+        } else {
+          throw new Error("Echtzeit-Transkription fehlgeschlagen. Bitte Modell-ID prüfen.");
+        }
       } else {
         text = await invoke("transcribe", {
           provider: s.stt_provider,
