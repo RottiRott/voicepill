@@ -126,11 +126,11 @@ pub async fn refine(
         }
 
         // OpenAI-kompatible Chat-Endpunkte
-        "openai" | "groq" => {
-            let url = if provider == "openai" {
-                "https://api.openai.com/v1/chat/completions"
-            } else {
-                "https://api.groq.com/openai/v1/chat/completions"
+        "openai" | "groq" | "gemini" => {
+            let url = match provider {
+                "openai" => "https://api.openai.com/v1/chat/completions",
+                "groq" => "https://api.groq.com/openai/v1/chat/completions",
+                _ => "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
             };
             let body = json!({
                 "model": model,

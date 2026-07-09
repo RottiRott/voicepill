@@ -13,6 +13,7 @@ const LLM_MODEL_DEFAULTS = {
   anthropic: "claude-haiku-4-5",
   openai: "gpt-4o-mini",
   groq: "llama-3.3-70b-versatile",
+  gemini: "gemini-2.5-flash",
 };
 
 // Preset-Dropdown aus presets.js befüllen
