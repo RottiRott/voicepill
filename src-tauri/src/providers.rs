@@ -211,10 +211,19 @@ pub async fn refine(
             if !status.is_success() {
                 return Err(api_error(provider, &v));
             }
-            v["choices"][0]["message"]["content"]
+            let raw_content = v["choices"][0]["message"]["content"]
                 .as_str()
                 .map(|s| s.trim().to_string())
-                .ok_or_else(|| format!("Unerwartete Antwort von {provider}: {v}"))
+                .ok_or_else(|| format!("Unerwartete Antwort von {provider}: {v}"))?;
+            
+            // Falls das Modell den Denkprozess in <think>...</think> mitschickt, filtern wir diesen heraus.
+            let clean_content = if raw_content.contains("<think>") && raw_content.contains("</think>") {
+                let parts: Vec<&str> = raw_content.split("</think>").collect();
+                parts.last().unwrap_or(&raw_content.as_str()).trim().to_string()
+            } else {
+                raw_content
+            };
+            Ok(clean_content)
         }
 
         _ => Err(format!("Unbekannter LLM-Provider: {provider}")),
