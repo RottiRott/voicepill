@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use base64::Engine;
 
 /// Speech-to-Text über den gewählten Provider.
 /// Neue Provider: hier einen Match-Arm ergänzen + Eintrag in ui/settings.js.
@@ -79,6 +80,51 @@ pub async fn transcribe(
                 .as_str()
                 .map(|s| s.trim().to_string())
                 .ok_or_else(|| format!("Unerwartete Antwort von deepgram: {body}"))
+        }
+
+        "gemini" => {
+            let b64_audio = base64::engine::general_purpose::STANDARD.encode(&wav);
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+                model, token
+            );
+            
+            let prompt = if language == "auto" {
+                "Transcribe this audio exactly as it is spoken. Do not translate. Output ONLY the transcription and nothing else."
+            } else {
+                // We format a custom prompt for the specific language if provided
+                "Transcribe this audio exactly as it is spoken. Do not translate. Output ONLY the transcription and nothing else."
+            };
+
+            let body = json!({
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {
+                            "mime_type": "audio/wav",
+                            "data": b64_audio
+                        }}
+                    ]
+                }]
+            });
+            let resp = client
+                .post(&url)
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Netzwerkfehler (gemini): {e}"))?;
+            let status = resp.status();
+            let v: Value = resp
+                .json()
+                .await
+                .map_err(|e| format!("Antwort unlesbar (gemini): {e}"))?;
+            if !status.is_success() {
+                return Err(api_error("gemini", &v));
+            }
+            v["candidates"][0]["content"]["parts"][0]["text"]
+                .as_str()
+                .map(|s| s.trim().to_string())
+                .ok_or_else(|| format!("Unerwartete Antwort von gemini: {v}"))
         }
 
         _ => Err(format!("Unbekannter STT-Provider: {provider}")),

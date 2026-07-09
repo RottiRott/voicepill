@@ -7,6 +7,7 @@ const STT_MODEL_DEFAULTS = {
   openai: "gpt-4o-mini-transcribe",
   deepgram: "nova-2",
   mistral: "voxtral-mini-latest",
+  gemini: "gemini-2.5-flash",
 };
 
 const LLM_MODEL_DEFAULTS = {

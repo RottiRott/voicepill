@@ -23,6 +23,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 arboard = "3"
 enigo = "0.2"
 anyhow = "1"
+base64 = "0.22"
 
 [profile.release]
 strip = true
