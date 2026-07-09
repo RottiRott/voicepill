@@ -185,6 +185,10 @@
         </div>
       </div>
       <div class="row">
+        <label class="field" for="sttCustomEndpoint">Eigener API-Endpunkt (Optional)</label>
+        <input type="text" id="sttCustomEndpoint" placeholder="z. B. http://localhost:8080/v1/audio/transcriptions" spellcheck="false" />
+      </div>
+      <div class="row">
         <label class="field" for="sttToken">API-Token</label>
         <div class="token-row">
           <input type="password" id="sttToken" placeholder="Token einfügen…" autocomplete="off" />
@@ -230,6 +234,10 @@
             <select id="refineModelSelect"></select>
             <input type="text" id="refineModelCustom" style="margin-top: 8px;" placeholder="Eigene Modell-ID eingeben…" spellcheck="false" hidden />
           </div>
+        </div>
+        <div class="row">
+          <label class="field" for="refineCustomEndpoint">Eigener API-Endpunkt (Optional)</label>
+          <input type="text" id="refineCustomEndpoint" placeholder="z. B. http://localhost:11434/v1/chat/completions" spellcheck="false" />
         </div>
         <div class="row">
           <label class="field" for="refineToken">API-Token</label>

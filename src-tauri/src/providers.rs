@@ -8,6 +8,7 @@ pub async fn transcribe(
     model: &str,
     language: &str,
     token: &str,
+    custom_endpoint: &str,
     wav: Vec<u8>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
@@ -15,10 +16,14 @@ pub async fn transcribe(
     match provider {
         // OpenAI-kompatible Transkriptions-Endpunkte (multipart)
         "openai" | "groq" | "mistral" => {
-            let url = match provider {
-                "openai" => "https://api.openai.com/v1/audio/transcriptions",
-                "groq" => "https://api.groq.com/openai/v1/audio/transcriptions",
-                _ => "https://api.mistral.ai/v1/audio/transcriptions",
+            let url = if !custom_endpoint.is_empty() {
+                custom_endpoint
+            } else {
+                match provider {
+                    "openai" => "https://api.openai.com/v1/audio/transcriptions",
+                    "groq" => "https://api.groq.com/openai/v1/audio/transcriptions",
+                    _ => "https://api.mistral.ai/v1/audio/transcriptions",
+                }
             };
             let part = reqwest::multipart::Part::bytes(wav)
                 .file_name("audio.wav")
@@ -138,6 +143,7 @@ pub async fn refine(
     system_prompt: &str,
     text: &str,
     token: &str,
+    custom_endpoint: &str,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -173,11 +179,15 @@ pub async fn refine(
 
         // OpenAI-kompatible Chat-Endpunkte
         "openai" | "groq" | "gemini" | "minimax" => {
-            let url = match provider {
-                "openai" => "https://api.openai.com/v1/chat/completions",
-                "groq" => "https://api.groq.com/openai/v1/chat/completions",
-                "minimax" => "https://api.minimax.io/v1/chat/completions",
-                _ => "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            let url = if !custom_endpoint.is_empty() {
+                custom_endpoint
+            } else {
+                match provider {
+                    "openai" => "https://api.openai.com/v1/chat/completions",
+                    "groq" => "https://api.groq.com/openai/v1/chat/completions",
+                    "minimax" => "https://api.minimax.io/v1/chat/completions",
+                    _ => "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                }
             };
             let body = json!({
                 "model": model,

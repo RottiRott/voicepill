@@ -58,13 +58,17 @@ async fn transcribe(
     provider: String,
     model: String,
     language: String,
+    custom_endpoint: String,
 ) -> Result<String, String> {
     let wav = state.last_wav.lock().unwrap().clone();
     if wav.is_empty() {
         return Err("Keine Audiodaten vorhanden".into());
     }
-    let token = get_keyring_token(&provider)?;
-    providers::transcribe(&provider, &model, &language, &token, wav).await
+    let token = get_keyring_token(&provider).unwrap_or_default();
+    if token.is_empty() && custom_endpoint.trim().is_empty() {
+        return Err(format!("Kein API-Token für '{provider}' hinterlegt. Bitte in den Einstellungen speichern."));
+    }
+    providers::transcribe(&provider, &model, &language, &token, &custom_endpoint, wav).await
 }
 
 #[tauri::command]
@@ -73,9 +77,13 @@ async fn refine(
     model: String,
     system_prompt: String,
     text: String,
+    custom_endpoint: String,
 ) -> Result<String, String> {
-    let token = get_keyring_token(&format!("llm:{provider}"))?;
-    providers::refine(&provider, &model, &system_prompt, &text, &token).await
+    let token = get_keyring_token(&format!("llm:{provider}")).unwrap_or_default();
+    if token.is_empty() && custom_endpoint.trim().is_empty() {
+        return Err(format!("Kein API-Token für '{provider}' hinterlegt. Bitte in den Einstellungen speichern."));
+    }
+    providers::refine(&provider, &model, &system_prompt, &text, &token, &custom_endpoint).await
 }
 
 // ---------- Einfügen ----------
@@ -153,6 +161,8 @@ fn default_settings() -> serde_json::Value {
         "language": "de",
         "hotkey": DEFAULT_HOTKEY,
         "auto_paste": true,
+        "stt_custom_endpoint": "",
+        "refine_custom_endpoint": "",
         "refine_enabled": false,
         "refine_provider": "anthropic",
         "refine_model": "claude-haiku-4-5",

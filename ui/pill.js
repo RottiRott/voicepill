@@ -59,13 +59,13 @@ async function startLiveTranscription() {
     const s = await invoke("load_settings");
     if (s.stt_provider !== "gemini") return;
 
-    const apiKey = await invoke("get_token", { key: "gemini" });
-    if (!apiKey) {
+    const apiKey = await invoke("get_token", { key: "gemini" }).catch(() => null);
+    if (!apiKey && !s.stt_custom_endpoint) {
       throw new Error("Kein API-Token für Gemini hinterlegt. Bitte speichern.");
     }
 
-    const model = s.stt_model || "gemini-3-flash";
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    const model = s.stt_model || "gemini-2.0-flash-exp";
+    const wsUrl = s.stt_custom_endpoint || `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
     
     liveSocket = new WebSocket(wsUrl);
     liveText = "";
@@ -179,6 +179,7 @@ async function toggle() {
           provider: s.stt_provider,
           model: s.stt_model,
           language: s.language,
+          customEndpoint: s.stt_custom_endpoint || "",
         });
       }
 
@@ -190,6 +191,7 @@ async function toggle() {
           model: s.refine_model,
           systemPrompt: prompt,
           text,
+          customEndpoint: s.refine_custom_endpoint || "",
         });
       }
 

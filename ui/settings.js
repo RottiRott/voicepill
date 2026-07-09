@@ -106,6 +106,7 @@ async function load() {
   const s = await invoke("load_settings");
   $("sttProvider").value = s.stt_provider;
   populateModelDropdown("stt", s.stt_model);
+  $("sttCustomEndpoint").value = s.stt_custom_endpoint || "";
   $("language").value = s.language;
   $("hotkey").value = s.hotkey;
   $("hotkeyHint").textContent = s.hotkey;
@@ -113,6 +114,7 @@ async function load() {
   $("refineEnabled").checked = !!s.refine_enabled;
   $("refineProvider").value = s.refine_provider;
   populateModelDropdown("refine", s.refine_model);
+  $("refineCustomEndpoint").value = s.refine_custom_endpoint || "";
   $("refinePreset").value = s.refine_preset;
   $("customPrompt").value = s.custom_prompt || "";
   syncRefineVisibility();
@@ -178,6 +180,8 @@ $("saveBtn").addEventListener("click", async () => {
       language: $("language").value,
       hotkey: $("hotkey").value.trim(),
       auto_paste: $("autoPaste").checked,
+      stt_custom_endpoint: $("sttCustomEndpoint").value.trim(),
+      refine_custom_endpoint: $("refineCustomEndpoint").value.trim(),
       refine_enabled: $("refineEnabled").checked,
       refine_provider: $("refineProvider").value,
       refine_model: getModelValue("refine"),
