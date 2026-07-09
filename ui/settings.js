@@ -51,36 +51,69 @@ function syncRefineVisibility() {
   $("customPromptRow").hidden = $("refinePreset").value !== "custom";
 }
 
-function updateModelSuggestions(kind) {
+function populateModelDropdown(kind, savedModelValue) {
   const provider = kind === "stt" ? $("sttProvider").value : $("refineProvider").value;
-  const listEl = kind === "stt" ? $("sttModelSuggestions") : $("refineModelSuggestions");
+  const selectEl = kind === "stt" ? $("sttModelSelect") : $("refineModelSelect");
+  const customInputEl = kind === "stt" ? $("sttModelCustom") : $("refineModelCustom");
   const suggestions = kind === "stt" ? STT_MODEL_SUGGESTIONS : LLM_MODEL_SUGGESTIONS;
-  
-  listEl.innerHTML = "";
+
+  selectEl.innerHTML = "";
   const models = suggestions[provider] || [];
+  
+  let hasMatchingSuggestion = false;
   for (const m of models) {
     const opt = document.createElement("option");
     opt.value = m;
-    listEl.appendChild(opt);
+    opt.textContent = m;
+    selectEl.appendChild(opt);
+    if (m === savedModelValue) {
+      hasMatchingSuggestion = true;
+    }
+  }
+
+  // Eigene Modell-Option
+  const optCustom = document.createElement("option");
+  optCustom.value = "custom";
+  optCustom.textContent = "Eigener Modellname…";
+  selectEl.appendChild(optCustom);
+
+  // Wert setzen
+  if (savedModelValue) {
+    if (hasMatchingSuggestion) {
+      selectEl.value = savedModelValue;
+      customInputEl.hidden = true;
+      customInputEl.value = "";
+    } else {
+      selectEl.value = "custom";
+      customInputEl.hidden = false;
+      customInputEl.value = savedModelValue;
+    }
+  } else {
+    const defaultVal = kind === "stt" ? STT_MODEL_DEFAULTS[provider] : LLM_MODEL_DEFAULTS[provider];
+    selectEl.value = defaultVal || models[0] || "custom";
+    if (selectEl.value === "custom") {
+      customInputEl.hidden = false;
+    } else {
+      customInputEl.hidden = true;
+      customInputEl.value = "";
+    }
   }
 }
 
 async function load() {
   const s = await invoke("load_settings");
   $("sttProvider").value = s.stt_provider;
-  $("sttModel").value = s.stt_model;
+  populateModelDropdown("stt", s.stt_model);
   $("language").value = s.language;
   $("hotkey").value = s.hotkey;
   $("hotkeyHint").textContent = s.hotkey;
   $("autoPaste").checked = !!s.auto_paste;
   $("refineEnabled").checked = !!s.refine_enabled;
   $("refineProvider").value = s.refine_provider;
-  $("refineModel").value = s.refine_model;
+  populateModelDropdown("refine", s.refine_model);
   $("refinePreset").value = s.refine_preset;
   $("customPrompt").value = s.custom_prompt || "";
   syncRefineVisibility();
-  updateModelSuggestions("stt");
-  updateModelSuggestions("refine");
   await refreshTokenState("stt");
   await refreshTokenState("refine");
 }
@@ -93,17 +126,25 @@ function showStatus(msg, isError = false) {
   setTimeout(() => el.classList.remove("show"), 3500);
 }
 
-// Provider-Wechsel: Modell-Default vorschlagen + Token-Status aktualisieren
+// Provider-Wechsel: Dropdown neu befüllen & Token-Status aktualisieren
 $("sttProvider").addEventListener("change", () => {
-  $("sttModel").value = STT_MODEL_DEFAULTS[$("sttProvider").value] || "";
-  updateModelSuggestions("stt");
+  populateModelDropdown("stt");
   refreshTokenState("stt");
 });
 $("refineProvider").addEventListener("change", () => {
-  $("refineModel").value = LLM_MODEL_DEFAULTS[$("refineProvider").value] || "";
-  updateModelSuggestions("refine");
+  populateModelDropdown("refine");
   refreshTokenState("refine");
 });
+
+$("sttModelSelect").addEventListener("change", () => {
+  $("sttModelCustom").hidden = $("sttModelSelect").value !== "custom";
+  if ($("sttModelSelect").value !== "custom") $("sttModelCustom").value = "";
+});
+$("refineModelSelect").addEventListener("change", () => {
+  $("refineModelCustom").hidden = $("refineModelSelect").value !== "custom";
+  if ($("refineModelSelect").value !== "custom") $("refineModelCustom").value = "";
+});
+
 $("refineEnabled").addEventListener("change", syncRefineVisibility);
 $("refinePreset").addEventListener("change", syncRefineVisibility);
 
@@ -121,15 +162,23 @@ $("saveBtn").addEventListener("click", async () => {
       $("refineToken").value = "";
     }
 
+    const getModelValue = (kind) => {
+      const selectVal = $(kind === "stt" ? "sttModelSelect" : "refineModelSelect").value;
+      if (selectVal === "custom") {
+        return $(kind === "stt" ? "sttModelCustom" : "refineModelCustom").value.trim();
+      }
+      return selectVal;
+    };
+
     const settings = {
       stt_provider: $("sttProvider").value,
-      stt_model: $("sttModel").value.trim(),
+      stt_model: getModelValue("stt"),
       language: $("language").value,
       hotkey: $("hotkey").value.trim(),
       auto_paste: $("autoPaste").checked,
       refine_enabled: $("refineEnabled").checked,
       refine_provider: $("refineProvider").value,
-      refine_model: $("refineModel").value.trim(),
+      refine_model: getModelValue("refine"),
       refine_preset: $("refinePreset").value,
       custom_prompt: $("customPrompt").value,
     };
