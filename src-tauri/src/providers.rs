@@ -172,10 +172,11 @@ pub async fn refine(
         }
 
         // OpenAI-kompatible Chat-Endpunkte
-        "openai" | "groq" | "gemini" => {
+        "openai" | "groq" | "gemini" | "minimax" => {
             let url = match provider {
                 "openai" => "https://api.openai.com/v1/chat/completions",
                 "groq" => "https://api.groq.com/openai/v1/chat/completions",
+                "minimax" => "https://api.minimax.io/v1/chat/completions",
                 _ => "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
             };
             let body = json!({

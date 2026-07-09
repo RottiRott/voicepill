@@ -15,6 +15,7 @@ const LLM_MODEL_DEFAULTS = {
   openai: "gpt-4o-mini",
   groq: "llama-3.3-70b-versatile",
   gemini: "gemini-2.5-flash",
+  minimax: "MiniMax-M3",
 };
 
 const STT_MODEL_SUGGESTIONS = {
@@ -30,6 +31,7 @@ const LLM_MODEL_SUGGESTIONS = {
   openai: ["gpt-4o-mini", "gpt-4o", "o1-mini", "o3-mini"],
   groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
   gemini: ["gemini-2.5-flash", "gemini-3.1-pro", "gemini-3.5-flash"],
+  minimax: ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1"],
 };
 
 // Preset-Dropdown aus presets.js befüllen
