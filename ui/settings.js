@@ -17,6 +17,21 @@ const LLM_MODEL_DEFAULTS = {
   gemini: "gemini-2.5-flash",
 };
 
+const STT_MODEL_SUGGESTIONS = {
+  groq: ["whisper-large-v3-turbo", "whisper-large-v3"],
+  openai: ["whisper-1"],
+  deepgram: ["nova-2", "nova-2-ea", "enhanced"],
+  mistral: ["voxtral-mini-latest"],
+  gemini: ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3-flash"],
+};
+
+const LLM_MODEL_SUGGESTIONS = {
+  anthropic: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest", "claude-haiku-4-5"],
+  openai: ["gpt-4o-mini", "gpt-4o", "o1-mini", "o3-mini"],
+  groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+  gemini: ["gemini-2.5-flash", "gemini-3.1-pro", "gemini-3.5-flash"],
+};
+
 // Preset-Dropdown aus presets.js befüllen
 for (const [key, p] of Object.entries(PRESETS)) {
   const opt = document.createElement("option");
@@ -36,6 +51,20 @@ function syncRefineVisibility() {
   $("customPromptRow").hidden = $("refinePreset").value !== "custom";
 }
 
+function updateModelSuggestions(kind) {
+  const provider = kind === "stt" ? $("sttProvider").value : $("refineProvider").value;
+  const listEl = kind === "stt" ? $("sttModelSuggestions") : $("refineModelSuggestions");
+  const suggestions = kind === "stt" ? STT_MODEL_SUGGESTIONS : LLM_MODEL_SUGGESTIONS;
+  
+  listEl.innerHTML = "";
+  const models = suggestions[provider] || [];
+  for (const m of models) {
+    const opt = document.createElement("option");
+    opt.value = m;
+    listEl.appendChild(opt);
+  }
+}
+
 async function load() {
   const s = await invoke("load_settings");
   $("sttProvider").value = s.stt_provider;
@@ -50,6 +79,8 @@ async function load() {
   $("refinePreset").value = s.refine_preset;
   $("customPrompt").value = s.custom_prompt || "";
   syncRefineVisibility();
+  updateModelSuggestions("stt");
+  updateModelSuggestions("refine");
   await refreshTokenState("stt");
   await refreshTokenState("refine");
 }
@@ -65,10 +96,12 @@ function showStatus(msg, isError = false) {
 // Provider-Wechsel: Modell-Default vorschlagen + Token-Status aktualisieren
 $("sttProvider").addEventListener("change", () => {
   $("sttModel").value = STT_MODEL_DEFAULTS[$("sttProvider").value] || "";
+  updateModelSuggestions("stt");
   refreshTokenState("stt");
 });
 $("refineProvider").addEventListener("change", () => {
   $("refineModel").value = LLM_MODEL_DEFAULTS[$("refineProvider").value] || "";
+  updateModelSuggestions("refine");
   refreshTokenState("refine");
 });
 $("refineEnabled").addEventListener("change", syncRefineVisibility);
