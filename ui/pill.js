@@ -58,6 +58,7 @@ async function startLiveTranscription() {
   try {
     const s = await invoke("load_settings");
     if (s.stt_provider !== "gemini") return;
+    if (!s.stt_model.includes("live") && !s.stt_model.includes("exp")) return;
 
     const apiKey = await invoke("get_token", { key: "gemini" }).catch(() => null);
     if (!apiKey && !s.stt_custom_endpoint) {
@@ -168,13 +169,12 @@ async function toggle() {
       await cleanUpLive();
 
       let text = "";
-      if (s.stt_provider === "gemini") {
-        if (finalLiveText) {
-          text = finalLiveText;
-        } else {
-          throw new Error("Echtzeit-Transkription fehlgeschlagen. Bitte Modell-ID prüfen.");
-        }
+      if (s.stt_provider === "gemini" && finalLiveText) {
+        text = finalLiveText;
       } else {
+        if (s.stt_provider === "gemini" && s.stt_model.includes("live")) {
+          throw new Error("Echtzeit-Modell benötigt eine aktive Live-Verbindung.");
+        }
         text = await invoke("transcribe", {
           provider: s.stt_provider,
           model: s.stt_model,
