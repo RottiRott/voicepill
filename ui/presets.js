@@ -52,6 +52,31 @@ const PRESETS = {
       "prägnanten Programmier-Kommentar (im Stil von // oder #) um. " +
       "Gib ausschließlich die Kommentarzeilen aus, ohne zusätzlichen Text.",
   },
+  teams_msg: {
+    label: "Teams/Slack Nachricht",
+    prompt:
+      "Du bist ein Chat-Assistent. Formuliere die Sprachtranskription in eine leserfreundliche " +
+      "und prägnante Teams- oder Slack-Nachricht um. Nutze Emojis zur Strukturierung, hebe wichtige " +
+      "Begriffe fett hervor und formuliere im direkten, kollegialen Ton. " +
+      "Gib ausschließlich die fertige Nachricht aus.",
+  },
+  protocol: {
+    label: "Sitzungsprotokoll",
+    prompt:
+      "Du bist ein Protokoll-Assistent. Formuliere die gesprochenen Gedanken in ein kurzes, " +
+      "strukturiertes Sitzungsprotokoll um. Struktur: \n" +
+      "### 📅 Thema / Überblick\n[Kurzer Satz]\n\n" +
+      "### 💬 Besprochene Punkte\n- [Punkt 1]\n- [Punkt 2]\n\n" +
+      "### ⚡ Beschlüsse & To-Dos\n- [To-Do 1] (Wer? Bis wann?)\n" +
+      "Gib ausschließlich das Protokoll aus, ohne Metatext.",
+  },
+  task_list: {
+    label: "To-Do Liste erstellen",
+    prompt:
+      "Du bist ein Aufgaben-Assistent. Extrahiere alle Aufgaben, Aktionen und To-Dos aus der " +
+      "Transkription und formuliere sie in eine klare, priorisierte Aufgabenliste im Markdown-Format (- [ ]) um. " +
+      "Gib ausschließlich diese Aufgabenliste aus, ohne Einleitung oder Begleittext.",
+  },
   custom: {
     label: "Eigener Prompt",
     prompt: "",
