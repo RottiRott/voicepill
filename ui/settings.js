@@ -23,14 +23,14 @@ const STT_MODEL_SUGGESTIONS = {
   openai: ["whisper-1"],
   deepgram: ["nova-2", "nova-2-ea", "enhanced"],
   mistral: ["voxtral-mini-latest"],
-  gemini: ["gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-3.1-flash-live-preview", "gemini-3.5-flash", "gemini-3-flash"],
+  gemini: ["gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-flash-live-preview", "gemini-3.5-flash", "gemini-3-flash"],
 };
 
 const LLM_MODEL_SUGGESTIONS = {
   anthropic: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest", "claude-haiku-4-5"],
   openai: ["gpt-4o-mini", "gpt-4o", "o1-mini", "o3-mini"],
   groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
-  gemini: ["gemini-2.5-flash", "gemini-3.1-pro", "gemini-3.5-flash"],
+  gemini: ["gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro", "gemini-3.5-flash"],
   minimax: ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1"],
 };
 
