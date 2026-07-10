@@ -13,9 +13,14 @@ jobs:
       matrix:
         include:
           - platform: macos-latest    # Apple Silicon (.dmg)
+            target: aarch64-apple-darwin
             args: ""
           - platform: windows-latest  # x64 (.msi + .exe)
+            target: x86_64-pc-windows-msvc
             args: ""
+          - platform: windows-latest  # arm64 (.msi + .exe)
+            target: aarch64-pc-windows-msvc
+            args: "--target aarch64-pc-windows-msvc"
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +30,8 @@ jobs:
           node-version: 20
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@v2
         with:
