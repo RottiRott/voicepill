@@ -15,6 +15,34 @@ let liveSocket = null;
 let liveText = "";
 let audioChunkUnlisten = null;
 
+function playSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    if (type === "start") {
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } else if (type === "stop") {
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    }
+  } catch (e) {
+    console.error("Audio feedback error", e);
+  }
+}
+
 function setState(next, text) {
   state = next;
   pill.className = next === "idle" ? "" : `active ${next}`;
@@ -52,10 +80,19 @@ function showError(err) {
   setTimeout(idle, 4000);
 }
 
-function buildRefinePrompt(settings) {
+function buildRefinePrompt(settings, activeApp) {
   const preset = settings.refine_preset || "cleanup";
-  if (preset === "custom") return (settings.custom_prompt || "").trim();
-  return (PRESETS[preset] || PRESETS.cleanup).prompt;
+  let basePrompt = preset === "custom" ? (settings.custom_prompt || "").trim() : (PRESETS[preset] || PRESETS.cleanup).prompt;
+  
+  if (settings.app_awareness && activeApp && activeApp !== "Unbekannt" && activeApp !== "VoicePill") {
+    basePrompt += `\n\nHinweis zum Kontext: Der Benutzer schreibt diese Nachricht aktuell in der Anwendung "${activeApp}". Passe Formatierung und Tonfall gegebenenfalls optimal an diese Anwendung an.`;
+  }
+  
+  if (settings.custom_vocabulary && settings.custom_vocabulary.trim()) {
+    basePrompt += `\n\nAchte besonders auf die korrekte Schreibweise folgender Fachbegriffe/Eigennamen: ${settings.custom_vocabulary.trim()}`;
+  }
+  
+  return basePrompt;
 }
 
 async function startLiveTranscription() {
@@ -149,65 +186,110 @@ async function cleanUpLive() {
   }
 }
 
-async function toggle() {
-  if (state === "idle" || state === "done" || state === "error") {
-    try {
-      await invoke("start_recording");
-      setState("recording", "Aufnahme");
-      startTimer();
-      await startLiveTranscription();
-    } catch (e) {
-      showError(e);
+async function startRecordingFlow() {
+  const s = await invoke("load_settings");
+  if (s.sound_effects) playSound("start");
+  try {
+    await invoke("start_recording");
+    setState("recording", "Aufnahme");
+    startTimer();
+    await startLiveTranscription();
+  } catch (e) {
+    showError(e);
+  }
+}
+
+async function stopRecordingFlow() {
+  const s = await invoke("load_settings");
+  if (s.sound_effects) playSound("stop");
+  stopTimer();
+  setState("processing", "Transkribiere…");
+  try {
+    await invoke("stop_recording");
+    const activeApp = s.app_awareness ? await invoke("get_active_app").catch(() => "Unbekannt") : "Unbekannt";
+    
+    const finalLiveText = liveText.trim();
+    await cleanUpLive();
+
+    let text = "";
+    if (s.stt_provider === "gemini" && finalLiveText) {
+      text = finalLiveText;
+    } else {
+      if (s.stt_provider === "gemini" && s.stt_model.includes("live")) {
+        throw new Error("Echtzeit-Modell benötigt eine aktive Live-Verbindung.");
+      }
+      text = await invoke("transcribe", {
+        provider: s.stt_provider,
+        model: s.stt_model,
+        language: s.language,
+        customEndpoint: s.stt_custom_endpoint || "",
+        promptVocab: s.custom_vocabulary || "",
+      });
     }
+
+    const rawText = text;
+    const prompt = buildRefinePrompt(s, activeApp);
+    if (s.refine_enabled && prompt) {
+      setState("refining", "Verfeinere…");
+      text = await invoke("refine", {
+        provider: s.refine_provider,
+        model: s.refine_model,
+        systemPrompt: prompt,
+        text,
+        customEndpoint: s.refine_custom_endpoint || "",
+      });
+    }
+
+    await invoke("paste_text", { text, autoPaste: s.auto_paste });
+    
+    // In Historie speichern
+    await invoke("add_history_entry", {
+      entry: {
+        id: String(Date.now()),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        raw_text: rawText,
+        refined_text: text,
+        preset: s.refine_preset || "cleanup",
+        app_name: activeApp
+      }
+    }).catch(() => {});
+
+    setState("done", s.auto_paste ? "Eingefügt" : "In Zwischenablage");
+    setTimeout(idle, 1800);
+  } catch (e) {
+    await cleanUpLive();
+    showError(e);
+  }
+}
+
+async function toggle() {
+  const s = await invoke("load_settings");
+  if (s.hotkey_mode === "hold") return; // Push-to-Talk ignoriert Toggle
+
+  if (state === "idle" || state === "done" || state === "error") {
+    await startRecordingFlow();
     return;
   }
 
   if (state === "recording") {
-    stopTimer();
-    setState("processing", "Transkribiere…");
-    try {
-      await invoke("stop_recording");
-      const s = await invoke("load_settings");
-      
-      const finalLiveText = liveText.trim();
-      await cleanUpLive();
-
-      let text = "";
-      if (s.stt_provider === "gemini" && finalLiveText) {
-        text = finalLiveText;
-      } else {
-        if (s.stt_provider === "gemini" && s.stt_model.includes("live")) {
-          throw new Error("Echtzeit-Modell benötigt eine aktive Live-Verbindung.");
-        }
-        text = await invoke("transcribe", {
-          provider: s.stt_provider,
-          model: s.stt_model,
-          language: s.language,
-          customEndpoint: s.stt_custom_endpoint || "",
-        });
-      }
-
-      const prompt = buildRefinePrompt(s);
-      if (s.refine_enabled && prompt) {
-        setState("refining", "Verfeinere…");
-        text = await invoke("refine", {
-          provider: s.refine_provider,
-          model: s.refine_model,
-          systemPrompt: prompt,
-          text,
-          customEndpoint: s.refine_custom_endpoint || "",
-        });
-      }
-
-      await invoke("paste_text", { text, autoPaste: s.auto_paste });
-      setState("done", s.auto_paste ? "Eingefügt" : "In Zwischenablage");
-      setTimeout(idle, 1800);
-    } catch (e) {
-      await cleanUpLive();
-      showError(e);
-    }
+    await stopRecordingFlow();
   }
 }
+
+// Push-to-Talk Event Listeners
+listen("hotkey-down", async () => {
+  const s = await invoke("load_settings");
+  if (s.hotkey_mode === "hold" && (state === "idle" || state === "done" || state === "error")) {
+    await startRecordingFlow();
+  }
+});
+
+listen("hotkey-up", async () => {
+  const s = await invoke("load_settings");
+  if (s.hotkey_mode === "hold" && state === "recording") {
+    await stopRecordingFlow();
+  }
+});
 
 // Klick auf die Pille während der Aufnahme bricht ab
 pill.addEventListener("click", async () => {

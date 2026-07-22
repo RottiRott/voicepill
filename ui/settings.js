@@ -102,6 +102,42 @@ function populateModelDropdown(kind, savedModelValue) {
   }
 }
 
+async function renderHistory() {
+  const container = $("historyList");
+  try {
+    const list = await invoke("load_history");
+    if (!list || list.length === 0) {
+      container.innerHTML = `<div style="font-size: 12px; color: var(--ink-soft); text-align: center; padding: 12px;">Noch keine Diktate vorhanden.</div>`;
+      return;
+    }
+    container.innerHTML = "";
+    for (const item of list) {
+      const card = document.createElement("div");
+      card.style.cssText = "background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 12.5px;";
+      
+      const meta = document.createElement("div");
+      meta.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 11px; color: var(--ink-soft);";
+      meta.innerHTML = `<span><b>${item.timestamp}</b> • App: <span style="color: var(--leaf); font-weight: 600;">${item.app_name || "Unbekannt"}</span></span><button class="copy-btn" style="padding: 2px 8px; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer;">Kopieren</button>`;
+      
+      const textEl = document.createElement("div");
+      textEl.style.cssText = "white-space: pre-wrap; word-break: break-word;";
+      textEl.textContent = item.refined_text || item.raw_text;
+      
+      card.appendChild(meta);
+      card.appendChild(textEl);
+      
+      card.querySelector(".copy-btn").addEventListener("click", async () => {
+        await invoke("paste_text", { text: item.refined_text || item.raw_text, autoPaste: false });
+        showStatus("In Zwischenablage kopiert ✓");
+      });
+      
+      container.appendChild(card);
+    }
+  } catch (e) {
+    container.innerHTML = `<div style="font-size: 12px; color: #b3261e; padding: 12px;">Fehler beim Laden des Verlaufs.</div>`;
+  }
+}
+
 async function load() {
   const s = await invoke("load_settings");
   $("sttProvider").value = s.stt_provider;
@@ -109,8 +145,12 @@ async function load() {
   $("sttCustomEndpoint").value = s.stt_custom_endpoint || "";
   $("language").value = s.language;
   $("hotkey").value = s.hotkey;
+  $("hotkeyMode").value = s.hotkey_mode || "toggle";
   $("hotkeyHint").textContent = s.hotkey;
   $("autoPaste").checked = !!s.auto_paste;
+  $("soundEffects").checked = s.sound_effects !== false;
+  $("appAwareness").checked = s.app_awareness !== false;
+  $("customVocabulary").value = s.custom_vocabulary || "";
   $("refineEnabled").checked = !!s.refine_enabled;
   $("refineProvider").value = s.refine_provider;
   populateModelDropdown("refine", s.refine_model);
@@ -120,6 +160,7 @@ async function load() {
   syncRefineVisibility();
   await refreshTokenState("stt");
   await refreshTokenState("refine");
+  await renderHistory();
 }
 
 function showStatus(msg, isError = false) {
@@ -152,6 +193,12 @@ $("refineModelSelect").addEventListener("change", () => {
 $("refineEnabled").addEventListener("change", syncRefineVisibility);
 $("refinePreset").addEventListener("change", syncRefineVisibility);
 
+$("clearHistoryBtn").addEventListener("click", async () => {
+  await invoke("clear_history").catch(() => {});
+  await renderHistory();
+  showStatus("Verlauf geleert ✓");
+});
+
 $("saveBtn").addEventListener("click", async () => {
   try {
     // Tokens nur schreiben, wenn etwas eingegeben wurde
@@ -179,7 +226,11 @@ $("saveBtn").addEventListener("click", async () => {
       stt_model: getModelValue("stt"),
       language: $("language").value,
       hotkey: $("hotkey").value.trim(),
+      hotkey_mode: $("hotkeyMode").value,
       auto_paste: $("autoPaste").checked,
+      sound_effects: $("soundEffects").checked,
+      app_awareness: $("appAwareness").checked,
+      custom_vocabulary: $("customVocabulary").value,
       stt_custom_endpoint: $("sttCustomEndpoint").value.trim(),
       refine_custom_endpoint: $("refineCustomEndpoint").value.trim(),
       refine_enabled: $("refineEnabled").checked,

@@ -9,6 +9,7 @@ pub async fn transcribe(
     language: &str,
     token: &str,
     custom_endpoint: &str,
+    prompt_vocab: &str,
     wav: Vec<u8>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
@@ -34,6 +35,9 @@ pub async fn transcribe(
                 .text("model", model.to_string());
             if language != "auto" {
                 form = form.text("language", language.to_string());
+            }
+            if !prompt_vocab.trim().is_empty() {
+                form = form.text("prompt", prompt_vocab.trim().to_string());
             }
             let resp = client
                 .post(url)
@@ -94,11 +98,10 @@ pub async fn transcribe(
                 model, token
             );
             
-            let prompt = if language == "auto" {
-                "Transcribe this audio exactly as it is spoken. Do not translate. Output ONLY the transcription and nothing else."
+            let prompt = if !prompt_vocab.trim().is_empty() {
+                format!("Transcribe this audio exactly as it is spoken. Do not translate. Output ONLY the transcription. Pay special attention to correct spelling of these terms: {}", prompt_vocab.trim())
             } else {
-                // We format a custom prompt for the specific language if provided
-                "Transcribe this audio exactly as it is spoken. Do not translate. Output ONLY the transcription and nothing else."
+                "Transcribe this audio exactly as it is spoken. Do not translate. Output ONLY the transcription and nothing else.".to_string()
             };
 
             let body = json!({

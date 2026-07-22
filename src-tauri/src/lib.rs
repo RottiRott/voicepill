@@ -50,6 +50,92 @@ fn cancel_recording(state: tauri::State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+// ---------- Aktive App erkennen ----------
+
+#[cfg(target_os = "macos")]
+fn get_active_app_name() -> String {
+    use std::process::Command;
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg("tell application \"System Events\" to get name of first process whose frontmost is true")
+        .output();
+    if let Ok(out) = output {
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !s.is_empty() {
+            return s;
+        }
+    }
+    "Unbekannt".to_string()
+}
+
+#[cfg(target_os = "windows")]
+fn get_active_app_name() -> String {
+    use std::process::Command;
+    let output = Command::new("powershell")
+        .arg("-NoProfile")
+        .arg("-Command")
+        .arg("(Get-Process -Id (Get-WindowThreadProcessId (Get-ForegroundWindow))[2]).ProcessName")
+        .output();
+    if let Ok(out) = output {
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !s.is_empty() {
+            return s;
+        }
+    }
+    "Unbekannt".to_string()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn get_active_app_name() -> String {
+    "Unbekannt".to_string()
+}
+
+#[tauri::command]
+fn get_active_app() -> String {
+    get_active_app_name()
+}
+
+// ---------- Diktier-Historie ----------
+
+fn history_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("history.json"))
+}
+
+#[tauri::command]
+fn load_history(app: tauri::AppHandle) -> serde_json::Value {
+    history_path(&app)
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!([]))
+}
+
+#[tauri::command]
+fn add_history_entry(app: tauri::AppHandle, entry: serde_json::Value) -> Result<(), String> {
+    let path = history_path(&app)?;
+    let mut list: Vec<serde_json::Value> = load_history(app.clone())
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    
+    list.insert(0, entry);
+    if list.len() > 50 {
+        list.truncate(50);
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&list).unwrap())
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_history(app: tauri::AppHandle) -> Result<(), String> {
+    let path = history_path(&app)?;
+    std::fs::write(&path, "[]").map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ---------- Transkription & Verfeinerung ----------
 
 #[tauri::command]
@@ -59,6 +145,7 @@ async fn transcribe(
     model: String,
     language: String,
     custom_endpoint: String,
+    prompt_vocab: String,
 ) -> Result<String, String> {
     let wav = state.last_wav.lock().unwrap().clone();
     if wav.is_empty() {
@@ -68,7 +155,7 @@ async fn transcribe(
     if token.is_empty() && custom_endpoint.trim().is_empty() {
         return Err(format!("Kein API-Token für '{provider}' hinterlegt. Bitte in den Einstellungen speichern."));
     }
-    providers::transcribe(&provider, &model, &language, &token, &custom_endpoint, wav).await
+    providers::transcribe(&provider, &model, &language, &token, &custom_endpoint, &prompt_vocab, wav).await
 }
 
 #[tauri::command]
@@ -160,6 +247,7 @@ fn default_settings() -> serde_json::Value {
         "stt_model": "whisper-large-v3-turbo",
         "language": "de",
         "hotkey": DEFAULT_HOTKEY,
+        "hotkey_mode": "toggle",
         "auto_paste": true,
         "stt_custom_endpoint": "",
         "refine_custom_endpoint": "",
@@ -167,7 +255,11 @@ fn default_settings() -> serde_json::Value {
         "refine_provider": "anthropic",
         "refine_model": "claude-haiku-4-5",
         "refine_preset": "cleanup",
-        "custom_prompt": ""
+        "custom_prompt": "",
+        "custom_vocabulary": "",
+        "sound_effects": true,
+        "app_awareness": true,
+        "preset_hotkey": ""
     })
 }
 
@@ -225,8 +317,14 @@ pub fn run() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        let _ = app.emit("hotkey-toggle", ());
+                    match event.state() {
+                        ShortcutState::Pressed => {
+                            let _ = app.emit("hotkey-down", ());
+                            let _ = app.emit("hotkey-toggle", ());
+                        }
+                        ShortcutState::Released => {
+                            let _ = app.emit("hotkey-up", ());
+                        }
                     }
                 })
                 .build(),
@@ -248,7 +346,11 @@ pub fn run() {
             load_settings,
             save_settings,
             update_hotkey,
-            set_pill_click_through
+            set_pill_click_through,
+            get_active_app,
+            load_history,
+            add_history_entry,
+            clear_history
         ])
         .setup(|app| {
             // Pille oben mittig positionieren und Klick-Durchlässigkeit aktivieren
