@@ -54,9 +54,9 @@ function syncRefineVisibility() {
 }
 
 function populateModelDropdown(kind, savedModelValue) {
-  const provider = kind === "stt" ? $("sttProvider").value : $("refineProvider").value;
-  const selectEl = kind === "stt" ? $("sttModelSelect") : $("refineModelSelect");
-  const customInputEl = kind === "stt" ? $("sttModelCustom") : $("refineModelCustom");
+  const provider = kind === "stt" ? $("sttProvider").value : (kind === "meeting" ? $("meetingProvider").value : $("refineProvider").value);
+  const selectEl = kind === "stt" ? $("sttModelSelect") : (kind === "meeting" ? $("meetingModelSelect") : $("refineModelSelect"));
+  const customInputEl = kind === "stt" ? $("sttModelCustom") : (kind === "meeting" ? $("meetingModelCustom") : $("refineModelCustom"));
   const suggestions = kind === "stt" ? STT_MODEL_SUGGESTIONS : LLM_MODEL_SUGGESTIONS;
 
   selectEl.innerHTML = "";
@@ -117,7 +117,8 @@ async function renderHistory() {
       
       const meta = document.createElement("div");
       meta.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 11px; color: var(--ink-soft);";
-      meta.innerHTML = `<span><b>${item.timestamp}</b> • App: <span style="color: var(--leaf); font-weight: 600;">${item.app_name || "Unbekannt"}</span></span><button class="copy-btn" style="padding: 2px 8px; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer;">Kopieren</button>`;
+      const presetBadge = item.preset === "meeting_protocol" ? `<span style="background: #e6f4ea; color: #137333; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 4px;">Meeting-Protokoll</span>` : "";
+      meta.innerHTML = `<span><b>${item.timestamp}</b> • App: <span style="color: var(--leaf); font-weight: 600;">${item.app_name || "Unbekannt"}</span>${presetBadge}</span><button class="copy-btn" style="padding: 2px 8px; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer;">Kopieren</button>`;
       
       const textEl = document.createElement("div");
       textEl.style.cssText = "white-space: pre-wrap; word-break: break-word;";
@@ -157,6 +158,15 @@ async function load() {
   $("refineCustomEndpoint").value = s.refine_custom_endpoint || "";
   $("refinePreset").value = s.refine_preset;
   $("customPrompt").value = s.custom_prompt || "";
+
+  // Meeting Mode Settings
+  $("meetingModeEnabled").checked = s.meeting_mode_enabled !== false;
+  $("meetingThresholdMin").value = s.meeting_threshold_min || 5;
+  $("meetingProvider").value = s.meeting_provider || "gemini";
+  populateModelDropdown("meeting", s.meeting_model || "gemini-3.1-pro");
+  $("meetingOutputDir").value = s.meeting_output_dir || "";
+  $("meetingWordTemplate").value = s.meeting_word_template || "";
+
   syncRefineVisibility();
   await refreshTokenState("stt");
   await refreshTokenState("refine");
@@ -180,6 +190,9 @@ $("refineProvider").addEventListener("change", () => {
   populateModelDropdown("refine");
   refreshTokenState("refine");
 });
+$("meetingProvider").addEventListener("change", () => {
+  populateModelDropdown("meeting");
+});
 
 $("sttModelSelect").addEventListener("change", () => {
   $("sttModelCustom").hidden = $("sttModelSelect").value !== "custom";
@@ -188,6 +201,20 @@ $("sttModelSelect").addEventListener("change", () => {
 $("refineModelSelect").addEventListener("change", () => {
   $("refineModelCustom").hidden = $("refineModelSelect").value !== "custom";
   if ($("refineModelSelect").value !== "custom") $("refineModelCustom").value = "";
+});
+$("meetingModelSelect").addEventListener("change", () => {
+  $("meetingModelCustom").hidden = $("meetingModelSelect").value !== "custom";
+  if ($("meetingModelSelect").value !== "custom") $("meetingModelCustom").value = "";
+});
+
+$("browseOutputDirBtn").addEventListener("click", async () => {
+  const folder = await invoke("select_folder");
+  if (folder) $("meetingOutputDir").value = folder;
+});
+
+$("browseWordTemplateBtn").addEventListener("click", async () => {
+  const file = await invoke("select_file", { extension: "docx" });
+  if (file) $("meetingWordTemplate").value = file;
 });
 
 $("refineEnabled").addEventListener("change", syncRefineVisibility);
@@ -214,9 +241,11 @@ $("saveBtn").addEventListener("click", async () => {
     }
 
     const getModelValue = (kind) => {
-      const selectVal = $(kind === "stt" ? "sttModelSelect" : "refineModelSelect").value;
+      const selectId = kind === "stt" ? "sttModelSelect" : (kind === "meeting" ? "meetingModelSelect" : "refineModelSelect");
+      const customId = kind === "stt" ? "sttModelCustom" : (kind === "meeting" ? "meetingModelCustom" : "refineModelCustom");
+      const selectVal = $(selectId).value;
       if (selectVal === "custom") {
-        return $(kind === "stt" ? "sttModelCustom" : "refineModelCustom").value.trim();
+        return $(customId).value.trim();
       }
       return selectVal;
     };
@@ -238,6 +267,12 @@ $("saveBtn").addEventListener("click", async () => {
       refine_model: getModelValue("refine"),
       refine_preset: $("refinePreset").value,
       custom_prompt: $("customPrompt").value,
+      meeting_mode_enabled: $("meetingModeEnabled").checked,
+      meeting_threshold_min: parseInt($("meetingThresholdMin").value, 10) || 5,
+      meeting_provider: $("meetingProvider").value,
+      meeting_model: getModelValue("meeting"),
+      meeting_output_dir: $("meetingOutputDir").value.trim(),
+      meeting_word_template: $("meetingWordTemplate").value.trim(),
     };
     await invoke("save_settings", { settings });
     await invoke("update_hotkey", { hotkey: settings.hotkey });

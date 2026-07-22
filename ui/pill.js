@@ -211,6 +211,10 @@ async function stopRecordingFlow() {
     const finalLiveText = liveText.trim();
     await cleanUpLive();
 
+    const durationSec = Math.floor((Date.now() - recordStart) / 1000);
+    const thresholdSec = (s.meeting_threshold_min || 5) * 60;
+    const isMeetingMode = s.meeting_mode_enabled && durationSec >= thresholdSec;
+
     let text = "";
     if (s.stt_provider === "gemini" && finalLiveText) {
       text = finalLiveText;
@@ -228,16 +232,58 @@ async function stopRecordingFlow() {
     }
 
     const rawText = text;
-    const prompt = buildRefinePrompt(s, activeApp);
-    if (s.refine_enabled && prompt) {
-      setState("refining", "Verfeinere…");
+
+    if (isMeetingMode) {
+      setState("refining", "Meeting-Protokoll…");
+      const meetingPrompt = `Du bist ein professioneller Protokollant. Erstelle aus dem folgenden Meeting-Diktat ein sauber strukturiertes Meeting-Protokoll auf Deutsch im Markdown-Format.
+Verwende exakt diese Überschriften:
+# Meeting-Protokoll
+**Datum:** ${new Date().toLocaleDateString('de-DE')}
+**Kontext / App:** ${activeApp}
+
+## Executive Summary
+Kompakte Zusammenfassung der Kernpunkte.
+
+## Themen & Diskussion
+Wichtige Punkte in Stichpunkten.
+
+## Beschlüsse & Ergebnisse
+Festgehaltene Beschlüsse.
+
+## To-Do Liste
+- [ ] Aufgabe 1 (Verantwortlich)
+- [ ] Aufgabe 2 (Verantwortlich)`;
+
+      const mProvider = s.meeting_provider || s.refine_provider || "gemini";
+      const mModel = s.meeting_model || s.refine_model || "gemini-3.1-pro";
+
       text = await invoke("refine", {
-        provider: s.refine_provider,
-        model: s.refine_model,
-        systemPrompt: prompt,
+        provider: mProvider,
+        model: mModel,
+        systemPrompt: meetingPrompt,
         text,
         customEndpoint: s.refine_custom_endpoint || "",
       });
+
+      setState("refining", "Erstelle Word & MD…");
+      await invoke("export_meeting_docs", {
+        markdownContent: text,
+        customOutputDir: s.meeting_output_dir || "",
+        templatePath: s.meeting_word_template || ""
+      }).catch(e => console.error("Meeting Export error:", e));
+
+    } else {
+      const prompt = buildRefinePrompt(s, activeApp);
+      if (s.refine_enabled && prompt) {
+        setState("refining", "Verfeinere…");
+        text = await invoke("refine", {
+          provider: s.refine_provider,
+          model: s.refine_model,
+          systemPrompt: prompt,
+          text,
+          customEndpoint: s.refine_custom_endpoint || "",
+        });
+      }
     }
 
     await invoke("paste_text", { text, autoPaste: s.auto_paste });
@@ -249,13 +295,13 @@ async function stopRecordingFlow() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         raw_text: rawText,
         refined_text: text,
-        preset: s.refine_preset || "cleanup",
+        preset: isMeetingMode ? "meeting_protocol" : (s.refine_preset || "cleanup"),
         app_name: activeApp
       }
     }).catch(() => {});
 
-    setState("done", s.auto_paste ? "Eingefügt" : "In Zwischenablage");
-    setTimeout(idle, 1800);
+    setState("done", isMeetingMode ? "Protokoll & Word gespeichert 📄" : (s.auto_paste ? "Eingefügt" : "In Zwischenablage"));
+    setTimeout(idle, 2400);
   } catch (e) {
     await cleanUpLive();
     showError(e);

@@ -1,4 +1,5 @@
 mod audio;
+mod doc_generator;
 mod providers;
 
 use std::sync::Mutex;
@@ -259,7 +260,13 @@ fn default_settings() -> serde_json::Value {
         "custom_vocabulary": "",
         "sound_effects": true,
         "app_awareness": true,
-        "preset_hotkey": ""
+        "preset_hotkey": "",
+        "meeting_mode_enabled": true,
+        "meeting_threshold_min": 5,
+        "meeting_provider": "gemini",
+        "meeting_model": "gemini-3.1-pro",
+        "meeting_output_dir": "",
+        "meeting_word_template": ""
     })
 }
 
@@ -309,6 +316,31 @@ fn set_pill_click_through(app: tauri::AppHandle, ignore: bool) -> Result<(), Str
     Ok(())
 }
 
+#[tauri::command]
+fn export_meeting_docs(
+    markdown_content: String,
+    custom_output_dir: String,
+    template_path: String,
+) -> Result<doc_generator::MeetingDocResult, String> {
+    doc_generator::export_meeting_documents(&markdown_content, &custom_output_dir, &template_path)
+}
+
+#[tauri::command]
+fn select_folder() -> Option<String> {
+    rfd::FileDialog::new()
+        .pick_folder()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn select_file(extension: String) -> Option<String> {
+    let mut dialog = rfd::FileDialog::new();
+    if !extension.is_empty() {
+        dialog = dialog.add_filter("Dateien", &[&extension]);
+    }
+    dialog.pick_file().map(|p| p.to_string_lossy().to_string())
+}
+
 // ---------- App ----------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -350,7 +382,10 @@ pub fn run() {
             get_active_app,
             load_history,
             add_history_entry,
-            clear_history
+            clear_history,
+            export_meeting_docs,
+            select_folder,
+            select_file
         ])
         .setup(|app| {
             // Pille oben mittig positionieren und Klick-Durchlässigkeit aktivieren
