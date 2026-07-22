@@ -20,6 +20,10 @@ function setState(next, text) {
   pill.className = next === "idle" ? "" : `active ${next}`;
   if (next === "error") pill.classList.add("error", "active");
   label.textContent = text;
+
+  // Wenn nicht aufgenommen wird, Fenster klick-durchlässig schalten, damit darunter liegende Apps nicht blockiert werden
+  const ignore = next !== "recording";
+  invoke("set_pill_click_through", { ignore }).catch(() => {});
 }
 
 function idle() {

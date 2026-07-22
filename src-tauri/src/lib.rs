@@ -209,6 +209,14 @@ fn update_hotkey(app: tauri::AppHandle, hotkey: String) -> Result<(), String> {
         .map_err(|e| format!("Hotkey '{hotkey}' konnte nicht registriert werden: {e}"))
 }
 
+#[tauri::command]
+fn set_pill_click_through(app: tauri::AppHandle, ignore: bool) -> Result<(), String> {
+    if let Some(pill) = app.get_webview_window("pill") {
+        let _ = pill.set_ignore_cursor_events(ignore);
+    }
+    Ok(())
+}
+
 // ---------- App ----------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -239,10 +247,11 @@ pub fn run() {
             get_token,
             load_settings,
             save_settings,
-            update_hotkey
+            update_hotkey,
+            set_pill_click_through
         ])
         .setup(|app| {
-            // Pille oben mittig positionieren
+            // Pille oben mittig positionieren und Klick-Durchlässigkeit aktivieren
             if let Some(pill) = app.get_webview_window("pill") {
                 if let Ok(Some(monitor)) = pill.primary_monitor() {
                     let screen = monitor.size();
@@ -250,6 +259,7 @@ pub fn run() {
                     let x = ((screen.width.saturating_sub(pill_w)) / 2) as i32;
                     let _ = pill.set_position(tauri::PhysicalPosition::new(x, 16));
                 }
+                let _ = pill.set_ignore_cursor_events(true);
             }
 
             // Hotkey aus Einstellungen registrieren
