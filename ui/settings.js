@@ -162,10 +162,12 @@ async function load() {
   // Meeting Mode Settings
   $("meetingModeEnabled").checked = s.meeting_mode_enabled !== false;
   $("meetingThresholdMin").value = s.meeting_threshold_min || 5;
+  $("meetingAskConfirmation").checked = s.meeting_ask_confirmation !== false;
   $("meetingProvider").value = s.meeting_provider || "gemini";
   populateModelDropdown("meeting", s.meeting_model || "gemini-3.1-pro");
   $("meetingOutputDir").value = s.meeting_output_dir || "";
   $("meetingWordTemplate").value = s.meeting_word_template || "";
+  $("customLogoPath").value = s.custom_logo_path || "";
 
   syncRefineVisibility();
   await refreshTokenState("stt");
@@ -215,6 +217,11 @@ $("browseOutputDirBtn").addEventListener("click", async () => {
 $("browseWordTemplateBtn").addEventListener("click", async () => {
   const file = await invoke("select_file", { extension: "docx" });
   if (file) $("meetingWordTemplate").value = file;
+});
+
+$("browseLogoBtn").addEventListener("click", async () => {
+  const file = await invoke("select_file", { extension: "" });
+  if (file) $("customLogoPath").value = file;
 });
 
 $("refineEnabled").addEventListener("change", syncRefineVisibility);
@@ -269,10 +276,12 @@ $("saveBtn").addEventListener("click", async () => {
       custom_prompt: $("customPrompt").value,
       meeting_mode_enabled: $("meetingModeEnabled").checked,
       meeting_threshold_min: parseInt($("meetingThresholdMin").value, 10) || 5,
+      meeting_ask_confirmation: $("meetingAskConfirmation").checked,
       meeting_provider: $("meetingProvider").value,
       meeting_model: getModelValue("meeting"),
       meeting_output_dir: $("meetingOutputDir").value.trim(),
       meeting_word_template: $("meetingWordTemplate").value.trim(),
+      custom_logo_path: $("customLogoPath").value.trim(),
     };
     await invoke("save_settings", { settings });
     await invoke("update_hotkey", { hotkey: settings.hotkey });

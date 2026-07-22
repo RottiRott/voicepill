@@ -338,6 +338,17 @@
           <input type="number" id="meetingThresholdMin" min="1" max="180" value="5" />
         </div>
 
+        <div class="row" style="display: flex; align-items: center; justify-content: space-between; margin-top: 18px;">
+          <div>
+            <b style="font-size: 13px;">Vor Erstellung nachfragen</b>
+            <div class="hint" style="margin-top: 2px;">Zeigt in der Pille 'Ja/Nein' an, bevor das Protokoll erstellt wird</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" id="meetingAskConfirmation" />
+            <span class="track"></span>
+          </span>
+        </div>
+
         <div class="row">
           <label class="field" for="meetingProvider">Meeting-KI Anbieter</label>
           <select id="meetingProvider">
@@ -362,13 +373,21 @@
           </div>
         </div>
 
+        <div class="row">
+          <label class="field" for="customLogoPath">Eigenes Logo (Word-Kopfzeile)</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="customLogoPath" placeholder="Pfad zum Firmenlogo (PNG/JPG/SVG)" style="flex: 1;" />
+            <button id="browseLogoBtn" style="padding: 0 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer;">Logo wählen…</button>
+          </div>
+        </div>
+
         <div class="row" style="grid-column: 1 / -1;">
           <label class="field" for="meetingWordTemplate">Word-Vorlage (.docx Formatvorlage)</label>
           <div style="display: flex; gap: 8px;">
             <input type="text" id="meetingWordTemplate" placeholder="Pfad zu deiner .docx Vorlage (optional)" style="flex: 1;" />
             <button id="browseWordTemplateBtn" style="padding: 0 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer;">Durchsuchen…</button>
           </div>
-          <div class="hint">Formatiert generierte Word-Dateien mit deinen Unternehmens-Überschriften und Formatvorlagen.</div>
+          <div class="hint">Formatiert generierte Word-Dateien mit deinen Unternehmens-Überschriften, Logo und Formatvorlagen.</div>
         </div>
       </div>
     </section>

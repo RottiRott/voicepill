@@ -49,9 +49,43 @@ function setState(next, text) {
   if (next === "error") pill.classList.add("error", "active");
   label.textContent = text;
 
-  // Wenn nicht aufgenommen wird, Fenster klick-durchlässig schalten, damit darunter liegende Apps nicht blockiert werden
-  const ignore = next !== "recording";
+  const actionsEl = document.getElementById("meetingConfirmActions");
+  if (actionsEl) {
+    actionsEl.style.display = next === "confirm_meeting" ? "flex" : "none";
+  }
+
+  // Wenn nicht aufgenommen wird oder nachgefragt wird, Fenster klick-durchlässig schalten, damit darunter liegende Apps nicht blockiert werden
+  const ignore = (next !== "recording" && next !== "confirm_meeting");
   invoke("set_pill_click_through", { ignore }).catch(() => {});
+}
+
+function askMeetingConfirmation() {
+  return new Promise((resolve) => {
+    setState("confirm_meeting", "Meeting-Protokoll (Word/MD)?");
+    
+    const btnJa = document.getElementById("btnConfirmMeetingJa");
+    const btnNein = document.getElementById("btnConfirmMeetingNein");
+
+    const cleanUp = () => {
+      btnJa.removeEventListener("click", onJa);
+      btnNein.removeEventListener("click", onNein);
+    };
+
+    const onJa = (e) => {
+      e.stopPropagation();
+      cleanUp();
+      resolve(true);
+    };
+
+    const onNein = (e) => {
+      e.stopPropagation();
+      cleanUp();
+      resolve(false);
+    };
+
+    btnJa.addEventListener("click", onJa);
+    btnNein.addEventListener("click", onNein);
+  });
 }
 
 function idle() {
@@ -69,63 +103,49 @@ function startTimer() {
 }
 
 function stopTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  timerEl.textContent = "";
 }
 
-function showError(err) {
+function showError(msg) {
   stopTimer();
-  const msg = String(err).slice(0, 60);
-  setState("error", msg);
+  setState("error", String(msg));
   setTimeout(idle, 4000);
 }
 
-function buildRefinePrompt(settings, activeApp) {
-  const preset = settings.refine_preset || "cleanup";
-  let basePrompt = preset === "custom" ? (settings.custom_prompt || "").trim() : (PRESETS[preset] || PRESETS.cleanup).prompt;
-  
-  if (settings.app_awareness && activeApp && activeApp !== "Unbekannt" && activeApp !== "VoicePill") {
-    basePrompt += `\n\nHinweis zum Kontext: Der Benutzer schreibt diese Nachricht aktuell in der Anwendung "${activeApp}". Passe Formatierung und Tonfall gegebenenfalls optimal an diese Anwendung an.`;
+function buildRefinePrompt(settings, activeApp = "") {
+  let p = PRESETS[settings.refine_preset] ? PRESETS[settings.refine_preset].prompt : PRESETS.cleanup.prompt;
+  if (settings.refine_preset === "custom" && settings.custom_prompt) {
+    p = settings.custom_prompt;
   }
-  
-  if (settings.custom_vocabulary && settings.custom_vocabulary.trim()) {
-    basePrompt += `\n\nAchte besonders auf die korrekte Schreibweise folgender Fachbegriffe/Eigennamen: ${settings.custom_vocabulary.trim()}`;
+  if (activeApp && activeApp !== "Unbekannt") {
+    p += `\n\nHINWEIS: Der erstellte Text wird direkt in die Anwendung '${activeApp}' eingefügt. Passe Tonfall, Länge und Struktur optimal an diese Anwendung an.`;
   }
-  
-  return basePrompt;
+  return p;
 }
 
 async function startLiveTranscription() {
+  const s = await invoke("load_settings");
+  liveText = "";
+  if (s.stt_provider !== "gemini") return;
+  const isLive = s.stt_model.includes("live") || s.stt_model.includes("exp");
+  if (!isLive) return;
+
   try {
-    const s = await invoke("load_settings");
-    if (s.stt_provider !== "gemini") return;
-    if (!s.stt_model.includes("live") && !s.stt_model.includes("exp")) return;
+    const token = await invoke("get_token", { key: "gemini" });
+    if (!token) return;
 
-    const apiKey = await invoke("get_token", { key: "gemini" }).catch(() => null);
-    if (!apiKey && !s.stt_custom_endpoint) {
-      throw new Error("Kein API-Token für Gemini hinterlegt. Bitte speichern.");
-    }
-
-    const model = s.stt_model || "gemini-2.0-flash-exp";
-    const wsUrl = s.stt_custom_endpoint || `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-    
+    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${token}`;
     liveSocket = new WebSocket(wsUrl);
-    liveText = "";
 
     liveSocket.onopen = () => {
       liveSocket.send(JSON.stringify({
         setup: {
-          model: `models/${model}`,
-          generationConfig: {
-            responseModalities: ["TEXT"]
-          },
-          systemInstruction: {
-            parts: [
-              {
-                text: "You are a precise speech-to-text transcriber. Transcribe the user's speech exactly as spoken in its original language. Do not translate. Output ONLY the transcription. Do not reply or comment."
-              }
-            ]
-          }
+          model: `models/${s.stt_model}`,
+          generationConfig: { responseModalities: ["TEXT"] }
         }
       }));
     };
@@ -133,21 +153,16 @@ async function startLiveTranscription() {
     liveSocket.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.serverContent && msg.serverContent.modelTurn && msg.serverContent.modelTurn.parts) {
-          const partText = msg.serverContent.modelTurn.parts.map(p => p.text).join("");
-          liveText += partText;
-          const display = liveText.trim();
-          if (display && state === "recording") {
-            label.textContent = display;
+        const parts = msg.serverContent?.modelTurn?.parts;
+        if (parts) {
+          for (const part of parts) {
+            if (part.text) {
+              liveText += part.text;
+              label.textContent = liveText.slice(-30);
+            }
           }
         }
-      } catch (err) {
-        console.error("Live transcription parse error", err);
-      }
-    };
-
-    liveSocket.onerror = (err) => {
-      console.error("Live transcription error", err);
+      } catch (e) {}
     };
 
     audioChunkUnlisten = await listen("audio-chunk", (event) => {
@@ -156,7 +171,7 @@ async function startLiveTranscription() {
           realtimeInput: {
             mediaChunks: [
               {
-                mimeType: "audio/pcm",
+                mimeType: "audio/pcm;rate=16000",
                 data: event.payload
               }
             ]
@@ -234,8 +249,14 @@ async function stopRecordingFlow() {
     const rawText = text;
 
     if (isMeetingMode) {
-      setState("refining", "Meeting-Protokoll…");
-      const meetingPrompt = `Du bist ein professioneller Protokollant. Erstelle aus dem folgenden Meeting-Diktat ein sauber strukturiertes Meeting-Protokoll auf Deutsch im Markdown-Format.
+      let doMeeting = true;
+      if (s.meeting_ask_confirmation !== false) {
+        doMeeting = await askMeetingConfirmation();
+      }
+
+      if (doMeeting) {
+        setState("refining", "Meeting-Protokoll…");
+        const meetingPrompt = `Du bist ein professioneller Protokollant. Erstelle aus dem folgenden Meeting-Diktat ein sauber strukturiertes Meeting-Protokoll auf Deutsch im Markdown-Format.
 Verwende exakt diese Überschriften:
 # Meeting-Protokoll
 **Datum:** ${new Date().toLocaleDateString('de-DE')}
@@ -254,24 +275,38 @@ Festgehaltene Beschlüsse.
 - [ ] Aufgabe 1 (Verantwortlich)
 - [ ] Aufgabe 2 (Verantwortlich)`;
 
-      const mProvider = s.meeting_provider || s.refine_provider || "gemini";
-      const mModel = s.meeting_model || s.refine_model || "gemini-3.1-pro";
+        const mProvider = s.meeting_provider || s.refine_provider || "gemini";
+        const mModel = s.meeting_model || s.refine_model || "gemini-3.1-pro";
 
-      text = await invoke("refine", {
-        provider: mProvider,
-        model: mModel,
-        systemPrompt: meetingPrompt,
-        text,
-        customEndpoint: s.refine_custom_endpoint || "",
-      });
+        text = await invoke("refine", {
+          provider: mProvider,
+          model: mModel,
+          systemPrompt: meetingPrompt,
+          text,
+          customEndpoint: s.refine_custom_endpoint || "",
+        });
 
-      setState("refining", "Erstelle Word & MD…");
-      await invoke("export_meeting_docs", {
-        markdownContent: text,
-        customOutputDir: s.meeting_output_dir || "",
-        templatePath: s.meeting_word_template || ""
-      }).catch(e => console.error("Meeting Export error:", e));
+        setState("refining", "Erstelle Word & MD…");
+        await invoke("export_meeting_docs", {
+          markdownContent: text,
+          customOutputDir: s.meeting_output_dir || "",
+          templatePath: s.meeting_word_template || "",
+          logoPath: s.custom_logo_path || ""
+        }).catch(e => console.error("Meeting Export error:", e));
 
+      } else {
+        const prompt = buildRefinePrompt(s, activeApp);
+        if (s.refine_enabled && prompt) {
+          setState("refining", "Verfeinere…");
+          text = await invoke("refine", {
+            provider: s.refine_provider,
+            model: s.refine_model,
+            systemPrompt: prompt,
+            text,
+            customEndpoint: s.refine_custom_endpoint || "",
+          });
+        }
+      }
     } else {
       const prompt = buildRefinePrompt(s, activeApp);
       if (s.refine_enabled && prompt) {

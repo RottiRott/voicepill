@@ -263,10 +263,12 @@ fn default_settings() -> serde_json::Value {
         "preset_hotkey": "",
         "meeting_mode_enabled": true,
         "meeting_threshold_min": 5,
+        "meeting_ask_confirmation": true,
         "meeting_provider": "gemini",
         "meeting_model": "gemini-3.1-pro",
         "meeting_output_dir": "",
-        "meeting_word_template": ""
+        "meeting_word_template": "",
+        "custom_logo_path": ""
     })
 }
 
@@ -321,8 +323,9 @@ fn export_meeting_docs(
     markdown_content: String,
     custom_output_dir: String,
     template_path: String,
+    logo_path: String,
 ) -> Result<doc_generator::MeetingDocResult, String> {
-    doc_generator::export_meeting_documents(&markdown_content, &custom_output_dir, &template_path)
+    doc_generator::export_meeting_documents(&markdown_content, &custom_output_dir, &template_path, &logo_path)
 }
 
 #[tauri::command]

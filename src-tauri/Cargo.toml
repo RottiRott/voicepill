@@ -1,6 +1,6 @@
 [package]
 name = "voicepill"
-version = "0.5.0"
+version = "0.5.1"
 description = "Systemweite Spracheingabe mit Pill-Overlay"
 edition = "2021"
 

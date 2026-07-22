@@ -13,8 +13,20 @@ pub struct MeetingDocResult {
 }
 
 /// Konvertiert ein Markdown-Meeting-Protokoll in ein echtes Word-Dokument (.docx)
-pub fn create_docx_from_markdown(markdown: &str, title: &str) -> Result<Vec<u8>, String> {
+pub fn create_docx_from_markdown(markdown: &str, title: &str, logo_path: &str) -> Result<Vec<u8>, String> {
     let mut docx = Docx::new();
+
+    // Logo einbetten, falls Pfad vorhanden und Datei existiert
+    if !logo_path.trim().is_empty() {
+        if let Ok(img_bytes) = fs::read(logo_path.trim()) {
+            let pic = Pic::new(&img_bytes);
+            let logo_para = Paragraph::new()
+                .add_run(Run::new().add_image(pic))
+                .align(AlignmentType::Center);
+            docx = docx.add_paragraph(logo_para);
+            docx = docx.add_paragraph(Paragraph::new()); // Abstand
+        }
+    }
 
     // Titel-Kopfzeile
     let header_para = Paragraph::new()
@@ -85,6 +97,7 @@ pub fn export_meeting_documents(
     markdown_content: &str,
     custom_output_dir: &str,
     _template_path: &str,
+    logo_path: &str,
 ) -> Result<MeetingDocResult, String> {
     let now = chrono::Local::now();
     let date_str = now.format("%Y-%m-%d").to_string();
@@ -113,8 +126,8 @@ pub fn export_meeting_documents(
     fs::write(&md_file_path, markdown_content)
         .map_err(|e| format!("Markdown-Datei konnte nicht geschrieben werden: {e}"))?;
 
-    // 2. Word (.docx) generieren
-    let docx_bytes = create_docx_from_markdown(markdown_content, &doc_title)?;
+    // 2. Word (.docx) generieren mit Logo
+    let docx_bytes = create_docx_from_markdown(markdown_content, &doc_title, logo_path)?;
     fs::write(&docx_file_path, docx_bytes)
         .map_err(|e| format!("Word-Datei konnte nicht geschrieben werden: {e}"))?;
 
